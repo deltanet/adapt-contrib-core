@@ -1,16 +1,16 @@
 {
   "name": "adapt-contrib-core",
-  "version": "6.1.3",
+  "version": "6.1.4",
   "framework": ">=5.17.0",
   "description": "Adapt Framework kernel. Responsible for boot loading, data loading and core APIs.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/adaptlearning/adapt-contrib-core.git"
+    "url": "https://github.com/deltanet/adapt-contrib-core.git"
   },
   "keywords": [
     "adapt-plugin",
     "adapt-core"
   ],
   "license": "GPL-3.0",
-  "bugs": "https://github.com/adaptlearning/adapt-contrib-core/issues"
+  "bugs": "https://github.com/deltanet/adapt-contrib-core/issues"
 }
