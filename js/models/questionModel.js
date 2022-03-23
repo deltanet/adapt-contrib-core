@@ -308,6 +308,7 @@ class QuestionModel extends ComponentModel {
       _attemptsLeft: attempts,
       _isCorrect: undefined,
       _isSubmitted: false,
+      _isCorrectAnswerShown: false,
       _buttonState: BUTTON_STATE.SUBMIT,
       _shouldShowMarking: this.shouldShowMarking
     });
