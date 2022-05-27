@@ -64,7 +64,8 @@
     "_defaultLanguage": {
       "type": "string",
       "title": "Default language code",
-      "default": "en"
+      "default": "en",
+      "_backboneForms": "DefaultLanguage"
     },
     "_defaultDirection": {
       "type": "string",
