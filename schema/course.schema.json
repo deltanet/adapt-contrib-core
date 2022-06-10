@@ -526,16 +526,6 @@
             "editorOnly": true
           }
         },
-        "_shareWithUsers": {
-          "type": "array",
-          "title": "Share with specific users",
-          "description": "Defines which individual users are able to edit this course",
-          "items": {
-            "type": "string",
-            "isObjectId": true
-          },
-          "_backboneForms": "Users"
-        },
         "themeVariables": {
           "type": "object",
           "title": "Theme variables",
