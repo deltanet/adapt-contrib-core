@@ -563,19 +563,6 @@
       "title": "Share with all users",
       "help": "Defines whether this course will be editable by all users"
     },
-    "_shareWithUsers": {
-      "type": "array",
-      "inputType": "Users",
-      "items": {
-        "type": "objectid",
-        "inputType": "Text",
-        "required": false,
-        "editorOnly": true,
-        "ref": "user"
-      },
-      "title": "Share with specific users",
-      "help": "Defines which individual users are able to edit this course"
-    },
     "themeSettings": {
       "type": "object"
     },
