@@ -11,6 +11,8 @@
   <button class="btn-text btn__action js-btn-action" aria-label="{{_buttons._submit.ariaLabel}}">
     {{{_buttons._submit.buttonText}}}
   </button>
+  
+  <span class="js-btn-marking-label aria-label u-display-none">{{#all _isInteractionComplete _canShowMarking}}{{#if _isCorrect}}{{@root/_globals._accessibility._ariaLabels.answeredCorrectly}}{{else}}{{@root/_globals._accessibility._ariaLabels.answeredIncorrectly}}{{/if}}{{/all}}</span>
 
   <span class="js-btn-marking-label aria-label u-display-none">{{#all _isInteractionComplete _canShowMarking}}{{#if _isCorrect}}{{@root/_globals._accessibility._ariaLabels.answeredCorrectly}}{{else}}{{@root/_globals._accessibility._ariaLabels.answeredIncorrectly}}{{/if}}{{/all}}</span>
 

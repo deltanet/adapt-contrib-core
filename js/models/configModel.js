@@ -1,5 +1,7 @@
 import Adapt from 'core/js/adapt';
+import wait from 'core/js/wait';
 import LockingModel from 'core/js/models/lockingModel';
+import logging from 'core/js/logging';
 
 export default class ConfigModel extends LockingModel {
 
@@ -45,13 +47,13 @@ export default class ConfigModel extends LockingModel {
         this.setValuesFromURLParams();
 
         Adapt.trigger('offlineStorage:prepare');
-        Adapt.wait.queue(() => {
+        wait.queue(() => {
           Adapt.trigger('configModel:dataLoaded');
           if (!this.get('_canLoadData')) return;
           Adapt.trigger('configModel:loadCourseData');
         });
       },
-      error: () => console.log('Unable to load course/config.json')
+      error: () => logging.error('Unable to load course/config.json')
     });
   }
 

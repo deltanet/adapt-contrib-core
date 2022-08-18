@@ -1,4 +1,5 @@
 import Adapt from 'core/js/adapt';
+import wait from 'core/js/wait';
 import Data from 'core/js/data';
 import AdaptSubsetCollection from 'core/js/collections/adaptSubsetCollection';
 import ContentObjectModel from 'core/js/models/contentObjectModel';
@@ -26,12 +27,12 @@ class MPABC extends Backbone.Controller {
 
   waitForDataLoaded() {
     // Tell the data loader to wait
-    Adapt.wait.begin();
+    wait.begin();
   }
 
   onDataLoaded() {
     // Tell the data loader that we have finished
-    Adapt.wait.end();
+    wait.end();
   }
 
   setupSubsetCollections() {
@@ -43,4 +44,5 @@ class MPABC extends Backbone.Controller {
 
 }
 
-export default (Adapt.mpabc = new MPABC());
+const mpabc = new MPABC();
+export default mpabc;

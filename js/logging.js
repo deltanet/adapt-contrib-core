@@ -133,4 +133,5 @@ class Logging extends Backbone.Controller {
 
 }
 
-export default (Adapt.log = new Logging());
+const logging = new Logging();
+export default logging;

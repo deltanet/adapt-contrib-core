@@ -1,20 +1,23 @@
 import Adapt from 'core/js/adapt';
 import Bowser from 'bowser';
+import _ from 'underscore';
 
 class Device extends Backbone.Controller {
 
   initialize() {
+    _.bindAll(this, 'onWindowResize', 'calculateResize');
+    this.bowser = Bowser.parse(window.navigator.userAgent);
     this.$html = $('html');
     this.$window = $(window);
     this.touch = Modernizr.touchevents;
     this.screenWidth = this.getScreenWidth();
     this.screenHeight = this.getScreenHeight();
-    this.browser = (Bowser.name || '').toLowerCase();
-    this.version = (Bowser.version || '').toLowerCase();
+    this.setViewportHeight();
+    this.browser = (this.bowser.browser.name || '').toLowerCase();
+    this.version = (this.bowser.browser.version || '').toLowerCase();
     this.OS = this.getOperatingSystem().toLowerCase();
-    this.osVersion = Bowser.osversion || '';
+    this.osVersion = this.bowser.os.version || '';
     this.renderingEngine = this.getRenderingEngine();
-    this.onWindowResize = _.debounce(this.onWindowResize.bind(this), 100);
     this.listenTo(Adapt, {
       'configModel:dataLoaded': this.onConfigDataLoaded
     });
@@ -22,7 +25,9 @@ class Device extends Backbone.Controller {
     // Convert 'msie' and 'internet explorer' to 'ie'.
     let browserString = browser.replace(/msie|internet explorer/, 'ie');
     browserString += ` version-${this.version} OS-${this.OS} ${this.getAppleDeviceType()}`;
+    // Legacy bad code, missing space after getAppleDevice and string replace is not global
     browserString += browserString.replace('.', '-').toLowerCase();
+    browserString += ` ${browserString.replace(/\./g, '-').toLowerCase()}`;
     browserString += ` pixel-density-${this.pixelDensity()}`;
     this.$html.addClass(browserString);
   }
@@ -68,7 +73,7 @@ class Device extends Backbone.Controller {
       : screenSizeConfig.small;
 
     const fontSize = parseFloat($('html').css('font-size'));
-    const screenSizeEmWidth = (this.screenWidth / fontSize);
+    const screenSizeEmWidth = (window.innerWidth / fontSize);
 
     // Check to see if client screen width is larger than medium em breakpoint
     // If so apply large, otherwise check to see if client screen width is
@@ -96,10 +101,12 @@ class Device extends Backbone.Controller {
       : window.innerHeight || this.$window.height();
   }
 
+  setViewportHeight() {
+    document.documentElement.style.setProperty('--adapt-viewport-height', `${window.innerHeight}px`);
+  }
+
   getOperatingSystem() {
-    const flags = ['windows', 'mac', 'linux', 'windowsphone', 'chromeos', 'android',
-      'ios', 'blackberry', 'firefoxos', 'webos', 'bada', 'tizen', 'sailfish'];
-    let os = flags.find(name => Bowser[name]) || '';
+    let os = this.bowser.os.name.toLowerCase() || '';
 
     if (os === '') {
       // Fall back to using navigator.platform in case Bowser can't detect the OS.
@@ -108,63 +115,84 @@ class Device extends Backbone.Controller {
       if (match) os = match[0];
       // Set consistency with the Bowser flags.
       if (os === 'win') os = 'windows';
-      if (!os) os = 'PlatformUnknown';
+      if (!os) os = '';
     }
+
+    if (!os) os = 'platformunknown';
 
     return os;
   }
 
   getRenderingEngine() {
-    const flags = ['webkit', 'blink', 'gecko', 'msie', 'msedge'];
-    return flags.find(name => Bowser[name]) || '';
+    return this.bowser.engine.name || '';
   }
 
   onWindowResize() {
+    if (this.hasWindowResized) return;
+    requestAnimationFrame(this.calculateResize);
+    this.hasWindowResized = true;
+  }
+
+  calculateResize() {
+    this.hasWindowResized = false;
     // Calculate the screen properties.
     const previousWidth = this.screenWidth;
     const previousHeight = this.screenHeight;
-
     this.screenWidth = this.getScreenWidth();
     this.screenHeight = this.getScreenHeight();
+    this.setViewportHeight();
 
     if (previousWidth === this.screenWidth && previousHeight === this.screenHeight) {
       // Do not trigger a change if the viewport hasn't actually changed.  Scrolling on iOS will trigger a resize.
       return;
     }
 
-    const newScreenSize = this.checkScreenSize();
+    if (this.orientation) {
+      this.$html.toggleClass('orientation-landscape', this.orientation === 'landscape');
+      this.$html.toggleClass('orientation-portrait', this.orientation === 'portrait');
+    }
 
+    const newScreenSize = this.checkScreenSize();
     if (newScreenSize !== this.screenSize) {
       this.screenSize = newScreenSize;
-
-      this.$html.removeClass('size-small size-medium size-large').addClass('size-' + this.screenSize);
-
-      if (this.orientation) {
-        this.$html.removeClass('orientation-landscape orientation-portrait').addClass('orientation-' + this.orientation);
-      }
-
+      this.$html.toggleClass('size-small', this.screenSize === 'small');
+      this.$html.toggleClass('size-medium', this.screenSize === 'medium');
+      this.$html.toggleClass('size-large', this.screenSize === 'large');
       Adapt.trigger('device:changed', this.screenSize);
     }
 
     Adapt.trigger('device:preResize device:resize device:postResize', this.screenWidth);
-
   }
 
   isAppleDevice() {
-    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    return (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) || (navigator.userAgent.match(/Mac/) && navigator?.maxTouchPoints > 2);
+  }
+
+  get shouldReportInvertedAppleScreenSize() {
+    const windowRatio = (window.innerWidth / window.innerHeight);
+    const screenRatio = (window.screen.width / window.screen.height);
+    const isWindowPortrait = (windowRatio < 1);
+    const isScreenPortrait = (screenRatio < 1);
+    const isDeviceBadlyReportingScreenOrientation = (isWindowPortrait !== isScreenPortrait);
+    return isDeviceBadlyReportingScreenOrientation;
   }
 
   getAppleScreenWidth() {
-    return (Math.abs(window.orientation) === 90) ? window.screen.height : window.screen.width;
+    return this.shouldReportInvertedAppleScreenSize ? window.screen.height : window.screen.width;
   }
 
   getAppleScreenHeight() {
-    return (Math.abs(window.orientation) === 90) ? window.screen.width : window.screen.height;
+    return this.shouldReportInvertedAppleScreenSize ? window.screen.width : window.screen.height;
   }
 
   getAppleDeviceType() {
-    const flags = ['iphone', 'ipad', 'ipod'];
-    return flags.find(name => Bowser[name]) || '';
+    const platformType = this.bowser.platform.type?.toLowerCase() || '';
+    const browserName = this.bowser.browser.name?.toLowerCase() || '';
+    const isIPhone = (platformType === 'mobile' && browserName === 'safari');
+    const isIPad = (platformType === 'tablet' && browserName === 'safari');
+    if (isIPhone) return 'iphone';
+    if (isIPad) return 'ipad';
+    return '';
   }
 
   pixelDensity() {
@@ -183,4 +211,5 @@ class Device extends Backbone.Controller {
 
 }
 
-export default (Adapt.device = new Device());
+const device = new Device();
+export default device;

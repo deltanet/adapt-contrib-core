@@ -25,4 +25,4 @@ Adapt.on({
   }
 });
 
-export default (Adapt.drawer = Drawer);
+export default Drawer;

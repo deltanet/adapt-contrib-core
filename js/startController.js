@@ -1,5 +1,8 @@
 import Adapt from 'core/js/adapt';
+import wait from 'core/js/wait';
 import LockingModel from 'core/js/models/lockingModel';
+import router from 'core/js/router';
+import data from 'core/js/data';
 
 class StartController extends Backbone.Controller {
 
@@ -61,7 +64,7 @@ class StartController extends Backbone.Controller {
       const className = item._className;
       const skipIfComplete = item._skipIfComplete;
 
-      const model = Adapt.findById(item._id);
+      const model = data.findById(item._id);
 
       if (!model) {
         console.log('startController: cannot find id', item._id);
@@ -85,8 +88,8 @@ class StartController extends Backbone.Controller {
 }
 
 Adapt.once('adapt:start', () => {
-  Adapt.startController.loadCourseData();
-  Adapt.startController.setStartLocation();
+  startController.loadCourseData();
+  startController.setStartLocation();
 });
 
 /*
@@ -94,7 +97,17 @@ Adapt.once('adapt:start', () => {
 * or by including in the top navigation bar a button that has the attribute `data-event="returnToStart"`
 */
 Adapt.on('navigation:returnToStart', () => {
-  Adapt.startController.returnToStartLocation();
+  startController.returnToStartLocation();
 });
 
-export default (Adapt.startController = new StartController());
+Adapt.on('app:languageChanged', () => {
+  wait.for(done => {
+    startController.loadCourseData();
+    const hash = startController.isEnabled() ? startController.getStartHash(false) : '#/';
+    router.navigate(hash, { trigger: true, replace: true });
+    done();
+  });
+});
+
+const startController = new StartController();
+export default startController;

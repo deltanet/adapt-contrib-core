@@ -2,8 +2,10 @@ import Adapt from 'core/js/adapt';
 import ComponentView from 'core/js/views/componentView';
 import ButtonsView from 'core/js/views/buttonsView';
 import BUTTON_STATE from 'core/js/enums/buttonStateEnum';
-import a11y from '../a11y';
-import log from '../logging';
+import a11y from 'core/js/a11y';
+import log from 'core/js/logging';
+import data from 'core/js/data';
+import location from 'core/js/location';
 import 'core/js/models/questionModel';
 
 class QuestionView extends ComponentView {
@@ -182,10 +184,6 @@ class QuestionView extends ComponentView {
     // Also adds a class of submitted
     this._runModelCompatibleFunction('setQuestionAsSubmitted');
 
-    // Used to remove instruction error that is set when
-    // the user has interacted in the wrong way
-    this.removeInstructionError();
-
     // Used to store the users answer for later
     // This is a blank method given to the question
     this._runModelCompatibleFunction('storeUserAnswer');
@@ -247,11 +245,6 @@ class QuestionView extends ComponentView {
     this.$('.component__widget').addClass('is-submitted');
   }
 
-  // Removes validation error class when the user canSubmit
-  removeInstructionError() {
-    this.$('.component__instruction-inner').removeClass('validation-error');
-  }
-
   // This is important and should give the user feedback on how they answered the question
   // Normally done through ticks and crosses by adding classes
   showMarking() {}
@@ -299,7 +292,7 @@ class QuestionView extends ComponentView {
     // then the button was clicked, focus on the first tabbable element
     if (!this.model.get('_isReady')) return;
     // Attempt to get the current page location
-    const currentModel = Adapt.findById(Adapt.location._currentId);
+    const currentModel = data.findById(location._currentId);
     // Make sure the page is ready
     if (!currentModel?.get('_isReady')) return;
     // Focus on the first readable item in this element

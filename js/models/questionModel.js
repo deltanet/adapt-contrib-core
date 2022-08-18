@@ -1,4 +1,5 @@
 import Adapt from 'core/js/adapt';
+import components from 'core/js/components';
 import ComponentModel from 'core/js/models/componentModel';
 import BUTTON_STATE from 'core/js/enums/buttonStateEnum';
 
@@ -128,7 +129,8 @@ class QuestionModel extends ComponentModel {
   setQuestionAsSubmitted() {
     this.set({
       _isEnabled: false,
-      _isSubmitted: true
+      _isSubmitted: true,
+      _shouldShowMarking: this.shouldShowMarking
     });
   }
 
@@ -148,8 +150,16 @@ class QuestionModel extends ComponentModel {
   // Should return a boolean based upon whether to question is correct or not
   isCorrect() {}
 
-  // Used to set the score based upon the _questionWeight
-  setScore() {}
+  /**
+   * Used to set the legacy _score property based upon the _questionWeight and correctness
+   * @deprecated Please use get score, get maxScore and get minScore instead
+   */
+  setScore() {
+    const questionWeight = this.get('_questionWeight');
+    const answeredCorrectly = this.get('_isCorrect');
+    const score = answeredCorrectly ? questionWeight : 0;
+    this.set('_score', score);
+  }
 
   updateRawScore() {
     this.set({
@@ -159,14 +169,24 @@ class QuestionModel extends ComponentModel {
     });
   }
 
+  /**
+   * Returns a numerical value between maxScore and minScore
+   * @type {number}
+   */
   get score() {
     return this.get('_isCorrect') ? this.maxScore : 0;
   }
 
+  /**
+   * @type {number}
+   */
   get maxScore() {
     return this.get('_questionWeight');
   }
 
+  /**
+   * @type {number}
+   */
   get minScore() {
     return 0;
   }
@@ -267,9 +287,14 @@ class QuestionModel extends ComponentModel {
     const body = (this.get('_attemptsLeft') && feedback.notFinal) || feedback.final;
 
     this.set({
+      altFeedbackTitle: this.getAltFeedbackTitle(),
       feedbackTitle: this.getFeedbackTitle(),
       feedbackMessage: Handlebars.compile(body)(this.toJSON())
     });
+  }
+
+  getAltFeedbackTitle() {
+    return this.get('_feedback').altTitle || Adapt.course.get('_globals')._accessibility.altFeedbackTitle || '';
   }
 
   getFeedbackTitle() {
@@ -307,6 +332,7 @@ class QuestionModel extends ComponentModel {
     this.set({
       _attemptsLeft: attempts,
       _isCorrect: undefined,
+      _isCorrectAnswerShown: false,
       _isSubmitted: false,
       _isCorrectAnswerShown: false,
       _buttonState: BUTTON_STATE.SUBMIT,
@@ -319,7 +345,8 @@ class QuestionModel extends ComponentModel {
   setQuestionAsReset() {
     this.set({
       _isEnabled: true,
-      _isSubmitted: false
+      _isSubmitted: false,
+      _shouldShowMarking: this.shouldShowMarking
     });
     this.resetQuestion();
   }
@@ -365,7 +392,7 @@ class QuestionModel extends ComponentModel {
    */
   onSubmitted() {
     // Stores the current attempt state
-    this.addAttemptObject();
+    if (this.get('_shouldStoreAttempts')) this.addAttemptObject();
     this.set('_shouldShowMarking', this.shouldShowMarking);
   }
 
@@ -377,6 +404,6 @@ class QuestionModel extends ComponentModel {
 }
 
 // This abstract model needs to registered to support deprecated view-only questions
-Adapt.register('question', { model: QuestionModel });
+components.register('question', { model: QuestionModel });
 
 export default QuestionModel;

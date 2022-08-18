@@ -1,4 +1,7 @@
 import Adapt from 'core/js/adapt';
+import offlineStorage from 'core/js/offlineStorage';
+import device from 'core/js/device';
+import location from 'core/js/location';
 import BrowserFocus from 'core/js/a11y/browserFocus';
 import FocusOptions from 'core/js/a11y/focusOptions';
 import KeyboardFocusOutline from 'core/js/a11y/keyboardFocusOutline';
@@ -6,9 +9,10 @@ import Log from 'core/js/a11y/log';
 import Scroll from 'core/js/a11y/scroll';
 import WrapFocus from 'core/js/a11y/wrapFocus';
 import Popup from 'core/js/a11y/popup';
-import defaultAriaLevels from './enums/defaultAriaLevels';
-
-import 'core/js/a11y/deprecated';
+import defaultAriaLevels from 'core/js/enums/defaultAriaLevels';
+import deprecated from 'core/js/a11y/deprecated';
+import logging from 'core/js/logging';
+import data from './data';
 
 class A11y extends Backbone.Controller {
 
@@ -70,12 +74,13 @@ class A11y extends Backbone.Controller {
     this._htmlCharRegex = /&.*;/g;
     /** @type {Object} */
     this.config = null;
-    this._browserFocus = new BrowserFocus();
-    this._keyboardFocusOutline = new KeyboardFocusOutline();
-    this._wrapFocus = new WrapFocus();
-    this._popup = new Popup();
-    this._scroll = new Scroll();
-    this.log = new Log();
+    this._browserFocus = new BrowserFocus({ a11y: this });
+    this._keyboardFocusOutline = new KeyboardFocusOutline({ a11y: this });
+    this._wrapFocus = new WrapFocus({ a11y: this });
+    this._popup = new Popup({ a11y: this });
+    this._scroll = new Scroll({ a11y: this });
+    this.log = new Log({ a11y: this });
+    deprecated(this);
 
     this._removeLegacyElements();
     this.listenToOnce(Adapt, {
@@ -93,7 +98,7 @@ class A11y extends Backbone.Controller {
     this.config = Adapt.config.get('_accessibility');
     this.config._isActive = false;
     this.config._options = _.defaults(this.config._options || {}, this.defaults());
-    Adapt.offlineStorage.set('a11y', false);
+    offlineStorage.set('a11y', false);
     this.$html.toggleClass('has-accessibility', this.isEnabled());
     this._setupNoSelect();
     this._addFocuserDiv();
@@ -126,7 +131,7 @@ class A11y extends Backbone.Controller {
     if (!$legacyElements.length && !$navigationElements.length) {
       return;
     }
-    Adapt.log.warn('REMOVED: #accessibility-toggle and #accessibility-instructions have been removed. Please remove them from all of your .html files.');
+    logging.warn('REMOVED: #accessibility-toggle and #accessibility-instructions have been removed. Please remove them from all of your .html files.');
     $legacyElements.remove();
     $navigationElements.remove();
   }
@@ -141,7 +146,7 @@ class A11y extends Backbone.Controller {
 
   _onNavigationEnd(view) {
     // Prevent sub-menu items provoking behaviour
-    if ((view?.model?.get('_id') !== Adapt.location._currentId) || !this.isEnabled()) {
+    if ((view?.model?.get('_id') !== location._currentId) || !this.isEnabled()) {
       return;
     }
     // Allow document to be read
@@ -159,32 +164,66 @@ class A11y extends Backbone.Controller {
 
   /**
    * Calculate the aria level for a heading
-   * @param {string|number} [defaultLevelOrType] Specify a default level or type group.
-   * @param {string|number} [overrideLevelOrType] Override with a level or type group from the designer.
+   * @param {object} [options]
+   * @param {string|number} [options.id] Used to automate the heading level when relative increments are used
+   * @param {string|number} [options.level] Specify a default level, "component" / "menu" / "componentItem" etc
+   * @param {string|number} [options.override] Override with a default level, an absolute value or a relative increment
    * @returns {number}
+   * @notes
+   * Default levels come from config.json:_accessibility._ariaLevels attribute names, they are:
+   *  "menu", "menuGroup", "menuItem", "page", "article", "block", "component", "componentItem" and "notify"
+   * An absolute value would be "1" or "2" etc.
+   * A relative increment would be "@page+1" or "@block+1". They are calculated from ancestor values,
+   * respecting both _ariaLevel overrides and not incrementing for missing displayTitle values.
    */
-  ariaLevel(defaultLevelOrType = 1, overrideLevelOrType) {
+  ariaLevel({
+    id = null,
+    level = "1",
+    override = null
+  } = {}) {
+    if (arguments.length === 2) {
+      // backward compatibility
+      level = arguments[0];
+      override =  arguments[1];
+      id = null;
+    }
     // get the global configuration from config.json
-    const cfg = Adapt.config.get('_accessibility');
-
-    // first check to see if the Handlebars context has an override
-    if (overrideLevelOrType) {
-      defaultLevelOrType = overrideLevelOrType;
+    const ariaLevels = Adapt.config.get('_accessibility')?._ariaLevels ?? defaultAriaLevels;
+    /**
+     * Recursive function to calculate aria-level
+     * @param {string} id Model id
+     * @param {string} level Default name, relative increment or absolute level
+     * @param {number} [offset=0] Total offset count from first absolute value
+     * @returns
+     */
+    function calculateLevel(id = null, level, offset = 0) {
+      const isNumber =  !isNaN(level);
+      const isTypeName = /[a-zA-z]/.test(level);
+      if (!isTypeName && isNumber) {
+        // if an absolute value is found, use it, adding the accumulated offset
+        return parseInt(level) + offset;
+      }
+      // parse the level value as a relative string
+      const relativeDescriptor = Adapt.parseRelativeString(level);
+      // lookup the default value from `config.json:_accessibility._ariaLevels`
+      const nextLevel = ariaLevels?.['_' + relativeDescriptor.type];
+      const hasModelId = Boolean(id);
+      if (!hasModelId) {
+        logging.warnOnce('Cannot calculate appropriate heading level, no model id was specified');
+        return calculateLevel(id, nextLevel, offset + relativeDescriptor.offset);
+      }
+      // try to find the next relevant ancestor, or use the specified model
+      const nextModel =  data.findById(id)?.findAncestor(relativeDescriptor.type?.toLowerCase()) ?? data.findById(id);
+      const nextModelId = nextModel?.get('_id') ?? id;
+      // check overrides, check title existence, adjust offset accordingly
+      const hasNextTitle = Boolean(nextModel.get('displayTitle'));
+      const nextModelOverride = nextModel.get('_ariaLevel');
+      const accumulatedOffset = offset + (hasNextTitle ? relativeDescriptor.offset : 0);
+      const resolvedLevel = nextModelOverride ?? nextLevel;
+      // move towards the parents until an absolute value is found
+      return calculateLevel(nextModelId, resolvedLevel, accumulatedOffset);
     }
-
-    if (!isNaN(defaultLevelOrType)) {
-      // if a number is passed just use this
-      return defaultLevelOrType;
-    }
-
-    if (_.isString(defaultLevelOrType)) {
-      // if a string is passed, check if it is defined in global configuration
-      const ariaLevels = cfg._ariaLevels ?? defaultAriaLevels;
-      return ariaLevels?.['_' + defaultLevelOrType] ?? defaultLevelOrType;
-    }
-
-    // default level to use if nothing overrides it
-    return defaultLevelOrType;
+    return calculateLevel(id, override ?? level)
   }
 
   /**
@@ -261,12 +300,40 @@ class A11y extends Backbone.Controller {
     }
     if (!isEnabled) {
       $elements.attr({
-        tabindex: '-1',
         'aria-disabled': 'true'
       }).addClass('is-disabled');
     } else {
-      $elements.removeAttr('aria-disabled tabindex').removeClass('is-disabled');
+      $elements.removeAttr('aria-disabled').removeClass('is-disabled');
     }
+    return this;
+  }
+
+  /**
+   * Toggles tabindexes off and on all tabbable descendants.
+   * @param {Object|string|Array} $element
+   * @param {boolean} isTabbable
+   * @returns {Object} Chainable
+   */
+  toggleTabbableDescendants($element, isTabbable = true) {
+    const $tabbable = this.findTabbable($element);
+    if (!isTabbable) {
+      $tabbable.each((index, element) => {
+        if (element.isAdaptTabHidden) return;
+        const $element = $(element);
+        element.isAdaptTabHidden = true;
+        element.adaptPreviousTabIndex = $element.attr('tabindex') ?? null;
+        $element.attr('tabindex', -1);
+      });
+      return this;
+    }
+    $tabbable.each((index, element) => {
+      if (!element.isAdaptTabHidden) return;
+      const $element = $(element);
+      if (element.adaptPreviousTabIndex === null) $element.removeAttr('tabindex');
+      else $element.attr('tabindex', element.adaptPreviousTabIndex);
+      delete element.isAdaptTabHidden;
+      delete element.adaptPreviousTabIndex;
+    });
     return this;
   }
 
@@ -375,8 +442,11 @@ class A11y extends Backbone.Controller {
 
     // check that the component is natively tabbable or
     // will be knowingly read by a screen reader
-    const hasNativeFocusOrIsScreenReadable = $element.is(config._options._focusableElements) ||
-      $element.is(config._options._readableElements);
+    const hasReadableContent = (!/^\s*$/.test($element.text()) ||
+      !/^\s*$/.test($element.attr('aria-label') ?? '') ||
+      !/^\s*$/.test($element.attr('aria-labelledby') ?? ''));
+    const hasNativeFocusOrIsScreenReadable = ($element.is(config._options._focusableElements) ||
+      $element.is(config._options._readableElements)) && hasReadableContent;
     if (hasNativeFocusOrIsScreenReadable) {
       return true;
     }
@@ -653,7 +723,8 @@ class A11y extends Backbone.Controller {
     function perform() {
       if ($element.attr('tabindex') === undefined) {
         $element.attr({
-          tabindex: '-1',
+          // JAWS reads better with 0, do not use -1
+          tabindex: '0',
           'data-a11y-force-focus': 'true'
         });
       }
@@ -667,7 +738,7 @@ class A11y extends Backbone.Controller {
           // Drop focus errors as only happens when the element
           // isn't attached to the DOM.
         }
-        switch (Adapt.device.browser) {
+        switch (device.browser) {
           case 'internet explorer':
           case 'microsoft edge':
           case 'safari':
@@ -792,4 +863,5 @@ class A11y extends Backbone.Controller {
 
 }
 
-export default (Adapt.a11y = new A11y());
+const a11y = new A11y();
+export default a11y;
